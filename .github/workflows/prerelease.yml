@@ -1,0 +1,81 @@
+name: Pre-Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version (e.g. 0.4.0) — appended as v{version}-rc.{N}"
+        required: true
+        type: string
+
+jobs:
+  prerelease:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyyaml cryptography pytest pytest-cov ruff
+
+      - name: Lint with ruff
+        uses: chartboost/ruff-action@v1
+
+      - name: Test with pytest
+        run: python -m pytest tests/ -v --tb=short --cov=src/capacium
+
+      - name: Determine next RC number
+        id: next_rc
+        run: |
+          PREFIX="${{ inputs.version }}"
+          EXISTING=$(git tag -l "v${PREFIX}-rc.*" | sed 's/.*-rc\.//' | sort -n | tail -1)
+          NEXT=$((EXISTING + 1))
+          echo "rc_number=${NEXT}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${PREFIX}-rc.${NEXT}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$LAST_TAG" ]; then
+            LOG=$(git log --oneline --no-decorate HEAD)
+          else
+            LOG=$(git log --oneline --no-decorate "${LAST_TAG}..HEAD")
+          fi
+          echo "log<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$LOG" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Create tag
+        run: |
+          TAG="${{ steps.next_rc.outputs.tag }}"
+          git tag "$TAG"
+          git push origin "$TAG"
+
+      - name: Create GitHub Pre-Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.next_rc.outputs.tag }}"
+          gh release create "$TAG" \
+            --title "Capacium v${{ inputs.version }} RC ${{ steps.next_rc.outputs.rc_number }}" \
+            --prerelease \
+            --notes "## Capacium v${{ inputs.version }} RC ${{ steps.next_rc.outputs.rc_number }}
+
+        **Pre-release** — not for production use.
+
+        ### Changes since last release
+        ${{ steps.changelog.outputs.log }}"
