@@ -193,10 +193,14 @@ class TestAdapterAutoSelection:
 
     def test_register_custom_adapter(self):
         class CustomAdapter(FrameworkAdapter):
-            def install_capability(self, cap_name, version, source_dir, owner="global"):
+            def install_skill(self, cap_name, version, source_dir, owner="global"):
                 return True
-            def remove_capability(self, cap_name, owner="global"):
+            def remove_skill(self, cap_name, owner="global"):
                 return True
+            def install_mcp_server(self, cap_name, version, source_dir, owner="global"):
+                return False
+            def remove_mcp_server(self, cap_name, owner="global"):
+                return False
             def capability_exists(self, cap_name):
                 return False
 

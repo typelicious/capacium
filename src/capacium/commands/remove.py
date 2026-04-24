@@ -33,7 +33,7 @@ def remove_capability(cap_spec: str, force: bool = False) -> bool:
 
     framework_name = cap.framework or "opencode"
     adapter = get_adapter(framework_name)
-    adapter.remove_capability(cap_name, owner=owner)
+    adapter.remove_capability(cap_name, owner=owner, kind=cap.kind.value if cap.kind else "skill")
 
     removed = registry.remove_capability(cap_id, version)
     if not removed:
@@ -76,7 +76,7 @@ def _remove_sub_capabilities(cap, registry: Registry, force: bool = False) -> No
         m_name = owner_name[-1]
 
         adapter = get_adapter(member_cap.framework or "opencode")
-        adapter.remove_capability(m_name, owner=m_owner)
+        adapter.remove_capability(m_name, owner=m_owner, kind=member_cap.kind.value if member_cap.kind else "skill")
 
         registry.remove_capability(member_cap_id, member_version)
         storage = StorageManager()

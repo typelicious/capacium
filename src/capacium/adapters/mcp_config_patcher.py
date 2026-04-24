@@ -1,0 +1,179 @@
+"""Shared MCP configuration patcher for JSON/TOML-based client configs.
+
+Provides safe backup, parse, inject, and save operations for MCP server
+entries across different client configuration formats.
+"""
+import json
+import shutil
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, Optional
+
+
+class McpConfigPatcher:
+    """Safely patches MCP server entries into client configuration files."""
+
+    @staticmethod
+    def backup(config_path: Path) -> Optional[Path]:
+        """Create a timestamped backup of the config file before editing."""
+        if not config_path.exists():
+            return None
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_path = config_path.with_suffix(f".{ts}.bak")
+        shutil.copy2(config_path, backup_path)
+        return backup_path
+
+    @staticmethod
+    def read_json(config_path: Path) -> dict:
+        """Read and parse a JSON config file, returning empty dict if missing."""
+        if not config_path.exists():
+            return {}
+        try:
+            with open(config_path) as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            return {}
+
+    @staticmethod
+    def write_json(config_path: Path, data: dict) -> None:
+        """Write a dict to a JSON config file with pretty formatting."""
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(config_path, "w") as f:
+            json.dump(data, f, indent=2)
+
+    @staticmethod
+    def read_toml(config_path: Path) -> dict:
+        """Read a TOML config file. Falls back to empty dict on error."""
+        if not config_path.exists():
+            return {}
+        try:
+            import tomllib
+            with open(config_path, "rb") as f:
+                return tomllib.load(f)
+        except (ImportError, Exception):
+            return {}
+
+    @staticmethod
+    def write_toml(config_path: Path, data: dict) -> None:
+        """Write a dict to a TOML config file."""
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            import tomli_w
+            with open(config_path, "wb") as f:
+                tomli_w.dump(data, f)
+        except ImportError:
+            # Fallback: write a simple TOML manually
+            with open(config_path, "w") as f:
+                McpConfigPatcher._write_toml_simple(f, data)
+
+    @staticmethod
+    def _write_toml_simple(f, data: dict, prefix: str = "") -> None:
+        """Minimal TOML writer for stdlib-only environments."""
+        for key, value in data.items():
+            full_key = f"{prefix}.{key}" if prefix else key
+            if isinstance(value, dict):
+                f.write(f"\n[{full_key}]\n")
+                McpConfigPatcher._write_toml_simple(f, value, full_key)
+            elif isinstance(value, list):
+                f.write(f"{key} = {json.dumps(value)}\n")
+            elif isinstance(value, bool):
+                f.write(f"{key} = {'true' if value else 'false'}\n")
+            elif isinstance(value, (int, float)):
+                f.write(f"{key} = {value}\n")
+            else:
+                f.write(f'{key} = "{value}"\n')
+
+    @staticmethod
+    def build_mcp_entry(
+        cap_name: str,
+        source_dir: Path,
+        mcp_meta: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Build a standard MCP server entry from a capability's manifest metadata.
+
+        Returns a dict like:
+            {
+                "command": "npx",
+                "args": ["-y", "my-mcp-server"],
+                "env": {}
+            }
+        """
+        meta = mcp_meta or {}
+        transport = meta.get("transport", "stdio")
+
+        if transport in ("sse", "streamable-http"):
+            return {
+                "url": meta.get("url", f"http://localhost:3000/{cap_name}"),
+                "transport": transport,
+            }
+
+        # stdio transport (default)
+        command = meta.get("command", "")
+        args = meta.get("args", [])
+        env = meta.get("env", {})
+
+        if not command:
+            # Auto-detect: look for common entry points
+            if (source_dir / "package.json").exists():
+                command = "npx"
+                args = ["-y", str(source_dir)]
+            elif (source_dir / "pyproject.toml").exists():
+                command = "uvx"
+                args = [cap_name]
+            elif (source_dir / "main.py").exists():
+                command = "python"
+                args = [str(source_dir / "main.py")]
+            else:
+                command = str(source_dir / cap_name)
+
+        entry: Dict[str, Any] = {"command": command}
+        if args:
+            entry["args"] = args
+        if env:
+            entry["env"] = env
+        return entry
+
+    @classmethod
+    def inject_json_mcp_server(
+        cls,
+        config_path: Path,
+        server_key: str,
+        mcp_section_key: str,
+        cap_name: str,
+        source_dir: Path,
+        mcp_meta: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        """Full pipeline: backup → read → inject → write for a JSON config."""
+        cls.backup(config_path)
+        config = cls.read_json(config_path)
+        servers = config.setdefault(mcp_section_key, {})
+        servers[server_key] = cls.build_mcp_entry(cap_name, source_dir, mcp_meta)
+        cls.write_json(config_path, config)
+        return True
+
+    @classmethod
+    def remove_json_mcp_server(
+        cls,
+        config_path: Path,
+        server_key: str,
+        mcp_section_key: str,
+    ) -> bool:
+        """Remove an MCP server entry from a JSON config."""
+        config = cls.read_json(config_path)
+        servers = config.get(mcp_section_key, {})
+        if server_key in servers:
+            cls.backup(config_path)
+            del servers[server_key]
+            cls.write_json(config_path, config)
+        return True
+
+    @classmethod
+    def mcp_server_exists_json(
+        cls,
+        config_path: Path,
+        server_key: str,
+        mcp_section_key: str,
+    ) -> bool:
+        """Check if an MCP server entry exists in a JSON config."""
+        config = cls.read_json(config_path)
+        return server_key in config.get(mcp_section_key, {})

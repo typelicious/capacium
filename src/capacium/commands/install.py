@@ -39,7 +39,7 @@ def install_capability(cap_spec: str, source_dir: Optional[Path] = None, no_lock
     frameworks = source_manifest.frameworks or ["opencode"]
 
     for fw, adapter in zip(frameworks, adapters):
-        success = adapter.install_capability(cap_name, version, source_dir, owner=owner)
+        success = adapter.install_capability(cap_name, version, source_dir, owner=owner, kind=source_manifest.kind or "skill")
         if not success:
             print(f"Failed to install capability for {fw}.")
             return False
@@ -144,7 +144,7 @@ def _install_single_sub_cap(
     adapters = get_adapters_for_manifest(sub_manifest)
     frameworks = sub_manifest.frameworks or ["opencode"]
     for fw, adapter in zip(frameworks, adapters):
-        adapter.install_capability(sub_name, version, source_path, owner=owner)
+        adapter.install_capability(sub_name, version, source_path, owner=owner, kind=sub_manifest.kind or "skill")
 
     sub_errors = sub_manifest.validate()
     if sub_errors:

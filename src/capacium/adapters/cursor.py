@@ -16,7 +16,7 @@ class CursorAdapter(FrameworkAdapter):
         self.project_rules_dir = Path.cwd() / ".cursor" / "rules"
         self.global_rules_dir = Path.home() / ".cursor" / "rules"
 
-    def install_capability(self, cap_name: str, version: str, source_dir: Path, owner: str = "global") -> bool:
+    def install_skill(self, cap_name: str, version: str, source_dir: Path, owner: str = "global") -> bool:
         package_dir = self.storage.get_package_dir(cap_name, version, owner=owner)
         if package_dir.exists():
             shutil.rmtree(package_dir)
@@ -35,7 +35,7 @@ class CursorAdapter(FrameworkAdapter):
 
         return True
 
-    def remove_capability(self, cap_name: str, owner: str = "global") -> bool:
+    def remove_skill(self, cap_name: str, owner: str = "global") -> bool:
         rule_path = self._get_rules_dir() / f"{cap_name}.mdc"
         if rule_path.exists():
             rule_path.unlink()
@@ -44,6 +44,13 @@ class CursorAdapter(FrameworkAdapter):
     def capability_exists(self, cap_name: str) -> bool:
         rule_path = self._get_rules_dir() / f"{cap_name}.mdc"
         return rule_path.exists()
+
+    def install_mcp_server(self, cap_name: str, version: str, source_dir: Path, owner: str = "global") -> bool:
+        print("MCP Server installation not yet natively supported via FrameworkAdapter for Cursor.")
+        return False
+
+    def remove_mcp_server(self, cap_name: str, owner: str = "global") -> bool:
+        return False
 
     def list_capabilities(self) -> List[str]:
         rules_dir = self._get_rules_dir()

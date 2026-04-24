@@ -14,7 +14,7 @@ class ClaudeCodeAdapter(FrameworkAdapter):
         self.symlink_manager = SymlinkManager()
         self.skills_dir = Path.home() / ".claude" / "skills"
 
-    def install_capability(self, cap_name: str, version: str, source_dir: Path, owner: str = "global") -> bool:
+    def install_skill(self, cap_name: str, version: str, source_dir: Path, owner: str = "global") -> bool:
         self.skills_dir.mkdir(parents=True, exist_ok=True)
 
         package_dir = self.storage.get_package_dir(cap_name, version, owner=owner)
@@ -32,7 +32,7 @@ class ClaudeCodeAdapter(FrameworkAdapter):
 
         return success
 
-    def remove_capability(self, cap_name: str, owner: str = "global") -> bool:
+    def remove_skill(self, cap_name: str, owner: str = "global") -> bool:
         link_path = self.skills_dir / cap_name
         if link_path.exists():
             self.symlink_manager.remove_symlink(link_path)
@@ -41,6 +41,34 @@ class ClaudeCodeAdapter(FrameworkAdapter):
     def capability_exists(self, cap_name: str) -> bool:
         link_path = self.skills_dir / cap_name
         return link_path.exists() and link_path.is_symlink()
+
+    def install_mcp_server(self, cap_name: str, version: str, source_dir: Path, owner: str = "global") -> bool:
+        from .mcp_config_patcher import McpConfigPatcher
+        package_dir = self.storage.get_package_dir(cap_name, version, owner=owner)
+        if package_dir.exists():
+            shutil.rmtree(package_dir)
+        shutil.copytree(source_dir, package_dir)
+
+        from ..manifest import Manifest
+        manifest = Manifest.detect_from_directory(package_dir)
+        mcp_meta = manifest.get_mcp_metadata()
+        config_path = Path.home() / ".claude.json"
+
+        return McpConfigPatcher.inject_json_mcp_server(
+            config_path=config_path,
+            server_key=cap_name,
+            mcp_section_key="mcpServers",
+            cap_name=cap_name,
+            source_dir=package_dir,
+            mcp_meta=mcp_meta,
+        )
+
+    def remove_mcp_server(self, cap_name: str, owner: str = "global") -> bool:
+        from .mcp_config_patcher import McpConfigPatcher
+        config_path = Path.home() / ".claude.json"
+        return McpConfigPatcher.remove_json_mcp_server(
+            config_path, cap_name, "mcpServers",
+        )
 
     def list_capabilities(self) -> List[str]:
         if not self.skills_dir.exists():

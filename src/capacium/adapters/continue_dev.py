@@ -16,7 +16,7 @@ class ContinueDevAdapter(FrameworkAdapter):
         self.config_dir = Path.home() / ".continue"
         self.config_path = self.config_dir / "config.json"
 
-    def install_capability(self, cap_name: str, version: str, source_dir: Path, owner: str = "global") -> bool:
+    def install_skill(self, cap_name: str, version: str, source_dir: Path, owner: str = "global") -> bool:
         package_dir = self.storage.get_package_dir(cap_name, version, owner=owner)
         if package_dir.exists():
             shutil.rmtree(package_dir)
@@ -46,7 +46,7 @@ class ContinueDevAdapter(FrameworkAdapter):
 
         return True
 
-    def remove_capability(self, cap_name: str, owner: str = "global") -> bool:
+    def remove_skill(self, cap_name: str, owner: str = "global") -> bool:
         config = self._read_config()
         providers = config.get("contextProviders", [])
         original_len = len(providers)
@@ -59,6 +59,13 @@ class ContinueDevAdapter(FrameworkAdapter):
         config = self._read_config()
         providers = config.get("contextProviders", [])
         return any(p.get("name") == cap_name for p in providers)
+
+    def install_mcp_server(self, cap_name: str, version: str, source_dir: Path, owner: str = "global") -> bool:
+        print("MCP Server installation not yet natively supported via FrameworkAdapter for Continue.")
+        return False
+
+    def remove_mcp_server(self, cap_name: str, owner: str = "global") -> bool:
+        return False
 
     def list_capabilities(self) -> List[str]:
         config = self._read_config()
