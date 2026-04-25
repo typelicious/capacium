@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.0] - 2026-04-25
+
+### Added
+- **Runtime resolver** — Capacium now models host runtimes (`uv`, `node`, `python`,
+  `docker`, `pipx`, `go`, `bun`, `deno`) as first-class concepts. New
+  `runtimes:` field on `capability.yaml` accepts entries like
+  `uv: ">=0.4.0"` and `node: ">=20"`.
+- **Auto-inference for MCP servers** — when `runtimes:` is omitted, `cap install`
+  derives the required runtime from `mcp.command` (e.g. `uvx` → `uv`,
+  `npx` → `node`).
+- **Pre-flight check on `cap install`** — installs are now blocked (exit code 1)
+  when a required runtime is missing or below the declared lower bound. Bypass
+  with `--skip-runtime-check`.
+- **`cap doctor`** — walks the local registry and reports per-capability runtime
+  health. Optionally scoped to a single capability via `cap doctor <cap-spec>`.
+- **`cap runtimes list`** — shows known runtimes, presence, and detected
+  versions on the host.
+- **`cap runtimes install <name>`** — prints the platform-appropriate install
+  command. Capacium does NOT execute it; the user copies it themselves.
+- New module `capacium.runtimes` with stdlib-only detection and a minimal
+  `">=X.Y.Z"` / `"*"` comparator (no `packaging` or `semver` dependency).
+- New documentation page `docs/runtimes.md`.
+- 67 new tests covering manifest parsing, auto-inference, version comparison,
+  detection, doctor, install pre-flight gate, and the `cap runtimes` CLI.
+
+### Changed
+- `cap --version` now reports `0.7.0`.
+- `Manifest` dataclass gains a `runtimes: Dict[str, str]` field; `dependencies:`
+  is unchanged and continues to express capability-on-capability deps.
+
 ## [0.6.1] - 2026-04-25
 
 ### Changed

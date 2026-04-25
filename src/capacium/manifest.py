@@ -22,6 +22,7 @@ class Manifest:
     keywords: List[str] = field(default_factory=list)
     frameworks: List[str] = field(default_factory=list)
     dependencies: Dict[str, str] = field(default_factory=dict)
+    runtimes: Dict[str, str] = field(default_factory=dict)
     capabilities: List[Dict[str, str]] = field(default_factory=list)
     checksums: Dict[str, str] = field(default_factory=dict)
     mcp: Dict[str, Any] = field(default_factory=dict)
@@ -64,6 +65,15 @@ class Manifest:
         # Ensure mcp section is a dict
         if "mcp" in data and not isinstance(data["mcp"], dict):
             data["mcp"] = {}
+        # Ensure runtimes section is a dict of str -> str
+        if "runtimes" in data:
+            if isinstance(data["runtimes"], dict):
+                data["runtimes"] = {
+                    str(k): ("*" if v is None else str(v))
+                    for k, v in data["runtimes"].items()
+                }
+            else:
+                data["runtimes"] = {}
         # Filter out unknown keys to prevent TypeError
         known_fields = {f.name for f in cls.__dataclass_fields__.values()}
         filtered = {k: v for k, v in data.items() if k in known_fields}

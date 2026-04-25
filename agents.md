@@ -25,6 +25,7 @@ Capacium is a Capability Packaging System for AI agent capabilities. It was extr
 |---------|----------|
 | `cap install` | Install capability from registry/path/git |
 | `cap install --no-lock` | Install without lock file enforcement |
+| `cap install --skip-runtime-check` | Skip the v0.7.0 host runtime pre-flight |
 | `cap remove` | Remove installed capability |
 | `cap list` | List installed capabilities |
 | `cap list --kind` | Filter by kind (skill, bundle, tool, etc.) |
@@ -34,6 +35,9 @@ Capacium is a Capability Packaging System for AI agent capabilities. It was extr
 | `cap search --registry` | Target a specific registry URL |
 | `cap verify` | Verify capability fingerprint |
 | `cap verify --all` | Verify all installed capabilities |
+| `cap doctor` | Check installed capabilities for missing host runtimes |
+| `cap runtimes list` | List known host runtimes (uv, node, …) and their state |
+| `cap runtimes install <name>` | Print install command for a runtime (does NOT run it) |
 | `cap lock` | Generate capability.lock for an installed capability |
 | `cap lock --update` | Refresh existing lock file |
 | `cap package` | Package capability for distribution |
@@ -53,6 +57,7 @@ src/capacium/
 ├── versioning.py       # Semantic version detection
 ├── symlink_manager.py  # Symlink lifecycle management
 ├── registry_client.py  # REST client for remote registries
+├── runtimes.py         # Host-runtime resolver (uv/node/python/docker/…)
 ├── commands/
 │   ├── install.py
 │   ├── remove.py
@@ -63,6 +68,8 @@ src/capacium/
 │   ├── lock.py          # Lock file generation + enforcement
 │   ├── package.py
 │   ├── publish.py       # Stub for registry publication
+│   ├── doctor.py        # v0.7.0: per-capability runtime health
+│   ├── runtimes_cmd.py  # v0.7.0: cap runtimes list / install hints
 │   ├── info.py          # V2: Full listing details
 │   ├── claim.py         # V2: Publisher claims
 │   ├── exchange.py      # V2: Exchange subcommands (search, categories, tags)
@@ -108,6 +115,8 @@ src/capacium/
 - Name is required (kebab-case recommended)
 - Framework field declares target frameworks (optional, NULL = agnostic)
 - Dependencies are version-constrained (semver range)
+- Runtimes field (v0.7.0+) declares host-level runtime requirements
+  (e.g. `uv: ">=0.4.0"`, `node: ">=20"`); validated pre-flight by `cap install`
 
 ### Releases
 - Language requirement: All release notes and changelogs MUST be written in English.
@@ -159,6 +168,27 @@ src/capacium/
 - Auto-selection via `get_adapter_for_manifest()` based on manifest `frameworks` field
 - Falls back to `opencode` for unknown/empty frameworks
 - Custom adapters can be registered via `register_adapter()`
+
+## Runtimes (v0.7.0+)
+
+- New `runtimes:` field on `capability.yaml` declares host-level requirements
+  (`uv`, `node`, `python`, `docker`, `pipx`, `go`, `bun`, `deno`).
+- Requirement syntax is intentionally minimal — `"*"`, `">=X.Y.Z"`, bare
+  `"X.Y.Z"` (treated as `">=X.Y.Z"`). Stdlib-only comparator; no `packaging` /
+  `semver` dependency.
+- Auto-inference from `mcp.command` when `runtimes:` is omitted: `uvx` → `uv`,
+  `npx` → `node`, `docker` → `docker`, `pipx` → `pipx`, `python(3)` → `python`,
+  `bun(x)` → `bun`, `deno` → `deno`.
+- `cap install` runs a pre-flight check; missing runtimes fail with exit code 1.
+  `--skip-runtime-check` bypasses.
+- `cap doctor` reports per-capability runtime health.
+- `cap runtimes list` / `cap runtimes install <name>` inspect or print install
+  hints (printing only — Capacium never executes package managers).
+- All implementation lives in `src/capacium/runtimes.py` (resolver),
+  `src/capacium/commands/doctor.py`, and
+  `src/capacium/commands/runtimes_cmd.py`.
+- The legacy `dependencies:` field is unchanged; it still expresses
+  capability-on-capability deps. Runtimes are deliberately separate.
 
 ## V2 Exchange & Crawler Architecture
 

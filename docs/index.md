@@ -14,6 +14,7 @@ Capacium is a capability-native packaging system for AI agent ecosystems. It def
 | [Bundle Support](bundles.md) | Multi-capability bundles |
 | [Lock Files](lockfile.md) | Dependency pinning and integrity |
 | [Framework Adapters](adapters.md) | Cross-framework installation |
+| [Runtimes](runtimes.md) | Host runtime resolver, `cap doctor`, `cap runtimes` |
 | [Registry](registry.md) | Local SQLite registry and remote API |
 
 ## Architecture
@@ -54,3 +55,4 @@ Capacium is a capability-native packaging system for AI agent ecosystems. It def
 - **Lock File** — `capability.lock` pins exact versions and fingerprints of dependencies.
 - **Registry** — SQLite database (local) or REST API (remote) for capability discovery.
 - **Adapter** — Framework-specific installation logic for each supported agent platform.
+- **Runtime** — A host-level program (e.g. `uv`, `node`, `docker`) that an MCP server or capability shells out to. Declared via the `runtimes:` field and validated pre-flight.

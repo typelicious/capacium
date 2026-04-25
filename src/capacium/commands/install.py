@@ -9,9 +9,19 @@ from ..fingerprint import compute_fingerprint, compute_bundle_fingerprint
 from ..manifest import Manifest
 from ..adapters import get_adapters_for_manifest
 from ..models import Capability, Kind
+from ..runtimes import (
+    RuntimeResolver,
+    format_failure_report,
+    infer_required_runtimes,
+)
 
 
-def install_capability(cap_spec: str, source_dir: Optional[Path] = None, no_lock: bool = False) -> bool:
+def install_capability(
+    cap_spec: str,
+    source_dir: Optional[Path] = None,
+    no_lock: bool = False,
+    skip_runtime_check: bool = False,
+) -> bool:
     if source_dir is None:
         source_dir = Path.cwd()
 
@@ -35,6 +45,11 @@ def install_capability(cap_spec: str, source_dir: Optional[Path] = None, no_lock
         return False
 
     source_manifest = Manifest.detect_from_directory(source_dir)
+
+    if not skip_runtime_check:
+        if not _preflight_runtimes(source_manifest):
+            return False
+
     adapters = get_adapters_for_manifest(source_manifest)
     frameworks = source_manifest.frameworks or ["opencode"]
 
@@ -180,3 +195,21 @@ def _resolve_source_path(source_raw: str, bundle_dir: Path) -> Path:
     if p.is_absolute():
         return p
     return (bundle_dir / p).resolve()
+
+
+def _preflight_runtimes(manifest: Manifest) -> bool:
+    """Resolve runtime requirements before dispatching to adapters.
+
+    Returns True when all required runtimes are present at acceptable versions
+    (or no runtimes are required). Returns False and prints a report otherwise.
+    """
+    requirements = infer_required_runtimes(manifest)
+    if not requirements:
+        return True
+    resolver = RuntimeResolver()
+    statuses = resolver.resolve(requirements)
+    failures = [s for s in statuses if not s.ok]
+    if not failures:
+        return True
+    print(format_failure_report(statuses))
+    return False

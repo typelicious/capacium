@@ -55,6 +55,15 @@ cap list
 # Verify integrity
 cap verify --all
 
+# Diagnose missing host runtimes for installed MCP capabilities
+cap doctor
+
+# List runtimes Capacium knows about (uv, node, python, docker, …)
+cap runtimes list
+
+# Print the install command for a runtime (does NOT execute it)
+cap runtimes install uv
+
 # Package for distribution
 cap package ./my-skill --output my-skill.tar.gz
 
@@ -89,6 +98,7 @@ cap sign my-skill --key mykey
 | [Bundle Support](docs/bundles.md) | Multi-capability bundles |
 | [Lock Files](docs/lockfile.md) | Dependency pinning |
 | [Framework Adapters](docs/adapters.md) | Cross-framework installation |
+| [Runtimes](docs/runtimes.md) | Host runtime resolver, `cap doctor`, `cap runtimes` |
 | [Registry](docs/registry.md) | Local and remote registry |
 | [API Spec](specs/registry-openapi.yaml) | Remote registry protocol |
 

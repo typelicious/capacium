@@ -12,7 +12,7 @@ def main():
     parser.add_argument(
         "-v", "--version",
         action="version",
-        version="%(prog)s 0.5.0"
+        version="%(prog)s 0.7.0"
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
@@ -22,6 +22,11 @@ def main():
     install_parser.add_argument("--version", help="Specific version to install")
     install_parser.add_argument("--source", help="Source directory (defaults to current directory)")
     install_parser.add_argument("--no-lock", action="store_true", help="Bypass lock file enforcement")
+    install_parser.add_argument(
+        "--skip-runtime-check",
+        action="store_true",
+        help="Skip the pre-flight runtime check (advanced)",
+    )
 
     update_parser = subparsers.add_parser("update", help="Update a capability")
     update_parser.add_argument("capability", help="Capability specification (owner/name[@version] or name[@version])")
@@ -68,6 +73,30 @@ def main():
     marketplace_parser.add_argument("--port", type=int, default=8000, help="Port to bind to (default: 8000)")
     marketplace_parser.add_argument("--open", action="store_true", help="Open browser automatically")
 
+    doctor_parser = subparsers.add_parser(
+        "doctor",
+        help="Check installed capabilities for missing host runtimes",
+    )
+    doctor_parser.add_argument(
+        "capability",
+        nargs="?",
+        help="Optional capability spec (owner/name) to check; defaults to all",
+    )
+
+    runtimes_parser = subparsers.add_parser(
+        "runtimes",
+        help="Inspect or print install hints for known host runtimes",
+    )
+    runtimes_sub = runtimes_parser.add_subparsers(
+        dest="runtimes_command", help="Runtime subcommand"
+    )
+    runtimes_sub.add_parser("list", help="List known runtimes and their detection state")
+    runtimes_install_parser = runtimes_sub.add_parser(
+        "install",
+        help="Print the install command for a runtime (does NOT execute it)",
+    )
+    runtimes_install_parser.add_argument("name", help="Runtime name (e.g. uv, node, python)")
+
     # V2 Platform Commands (info, claim, exchange, trust, crawl) have been extracted to Capacium V3 Platform Services.
 
     if len(sys.argv) == 1:
@@ -83,7 +112,12 @@ def main():
             cap_spec = args.capability
             if args.version:
                 cap_spec = f"{args.capability}@{args.version}"
-            success = install_capability(cap_spec, source_dir, no_lock=args.no_lock)
+            success = install_capability(
+                cap_spec,
+                source_dir,
+                no_lock=args.no_lock,
+                skip_runtime_check=getattr(args, "skip_runtime_check", False),
+            )
             sys.exit(0 if success else 1)
 
         elif args.command == "update":
@@ -138,6 +172,24 @@ def main():
             from .commands.publish import publish_capability
             success = publish_capability(Path(args.path))
             sys.exit(0 if success else 1)
+
+        elif args.command == "doctor":
+            from .commands.doctor import doctor
+            success = doctor(args.capability)
+            sys.exit(0 if success else 1)
+
+        elif args.command == "runtimes":
+            from .commands.runtimes_cmd import list_runtimes, show_install_hint
+            sub = getattr(args, "runtimes_command", None) or "list"
+            if sub == "list":
+                list_runtimes()
+                sys.exit(0)
+            elif sub == "install":
+                success = show_install_hint(args.name)
+                sys.exit(0 if success else 1)
+            else:
+                runtimes_parser.print_help()
+                sys.exit(1)
 
 # Platform subcommands (marketplace, info, claim, exchange, trust, crawl)
         # have been extracted to Capacium V3 Platform Services.
