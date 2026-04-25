@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.1] - 2026-04-25
+
+### Changed
+- Updated default registry URL from `registry.capacium.dev/v1` to `api.capacium.xyz/v2`.
+
+### Removed
+- Internal planning artifacts (`prd/`, `specs/`) from public tracking.
+
 ## [0.6.0] - 2026-04-24
 
 ### Added

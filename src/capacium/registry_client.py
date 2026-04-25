@@ -73,7 +73,7 @@ class RegistryClient:
             raise RegistryClientError(f"Network error: {e}") from e
 
     def _build_registry_url(self, path: str, registry_url: Optional[str] = None) -> str:
-        base = (registry_url or os.environ.get("CAPACIUM_REGISTRY_URL", "https://registry.capacium.dev/v1")).rstrip("/")
+        base = (registry_url or os.environ.get("CAPACIUM_REGISTRY_URL", "https://api.capacium.xyz/v2")).rstrip("/")
         return f"{base}{path}"
 
     def search(
