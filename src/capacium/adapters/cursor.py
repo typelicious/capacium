@@ -6,15 +6,23 @@ from ..storage import StorageManager
 from ..symlink_manager import SymlinkManager
 from ..manifest import Manifest
 from .base import FrameworkAdapter
+from .mcp_config_patcher import McpConfigPatcher
 
 
 class CursorAdapter(FrameworkAdapter):
+
+    # Cursor reads MCP servers from ~/.cursor/mcp.json (global) or
+    # <project>/.cursor/mcp.json (project-local). Both use the same
+    # `mcpServers` JSON map shape Claude Desktop / Windsurf use.
+    MCP_SECTION_KEY = "mcpServers"
 
     def __init__(self):
         self.storage = StorageManager()
         self.symlink_manager = SymlinkManager()
         self.project_rules_dir = Path.cwd() / ".cursor" / "rules"
         self.global_rules_dir = Path.home() / ".cursor" / "rules"
+        self.project_mcp_path = Path.cwd() / ".cursor" / "mcp.json"
+        self.global_mcp_path = Path.home() / ".cursor" / "mcp.json"
 
     def install_skill(self, cap_name: str, version: str, source_dir: Path, owner: str = "global") -> bool:
         package_dir = self.storage.get_package_dir(cap_name, version, owner=owner)
@@ -43,14 +51,34 @@ class CursorAdapter(FrameworkAdapter):
 
     def capability_exists(self, cap_name: str) -> bool:
         rule_path = self._get_rules_dir() / f"{cap_name}.mdc"
-        return rule_path.exists()
+        if rule_path.exists():
+            return True
+        return McpConfigPatcher.mcp_server_exists_json(
+            self._get_mcp_path(), cap_name, self.MCP_SECTION_KEY,
+        )
 
     def install_mcp_server(self, cap_name: str, version: str, source_dir: Path, owner: str = "global") -> bool:
-        print("MCP Server installation not yet natively supported via FrameworkAdapter for Cursor.")
-        return False
+        package_dir = self.storage.get_package_dir(cap_name, version, owner=owner)
+        if package_dir.exists():
+            shutil.rmtree(package_dir)
+        shutil.copytree(source_dir, package_dir)
+
+        manifest = Manifest.detect_from_directory(package_dir)
+        mcp_meta = manifest.get_mcp_metadata()
+
+        return McpConfigPatcher.inject_json_mcp_server(
+            config_path=self._get_mcp_path(),
+            server_key=cap_name,
+            mcp_section_key=self.MCP_SECTION_KEY,
+            cap_name=cap_name,
+            source_dir=package_dir,
+            mcp_meta=mcp_meta,
+        )
 
     def remove_mcp_server(self, cap_name: str, owner: str = "global") -> bool:
-        return False
+        return McpConfigPatcher.remove_json_mcp_server(
+            self._get_mcp_path(), cap_name, self.MCP_SECTION_KEY,
+        )
 
     def list_capabilities(self) -> List[str]:
         rules_dir = self._get_rules_dir()
@@ -76,6 +104,13 @@ class CursorAdapter(FrameworkAdapter):
         if self.project_rules_dir.exists():
             return self.project_rules_dir
         return self.global_rules_dir
+
+    def _get_mcp_path(self) -> Path:
+        # Mirror Cursor's own precedence: project-local config wins when its
+        # parent .cursor/ already exists in the cwd.
+        if self.project_mcp_path.parent.exists():
+            return self.project_mcp_path
+        return self.global_mcp_path
 
     def _ensure_rules_dir(self) -> Path:
         rules_dir = self._get_rules_dir()

@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.2] - 2026-04-25
+
+### Added
+- **Cursor MCP support** — `cursor` adapter now patches `.cursor/mcp.json`
+  (project-local preferred, `~/.cursor/mcp.json` fallback) using the standard
+  `mcpServers` JSON map. Previously returned `False` with a "not yet
+  natively supported" message. The skill (`.cursor/rules/<name>.mdc`) and MCP
+  paths coexist on the same adapter and `capability_exists` checks both.
+- **Continue.dev MCP support** — `continue-dev` adapter now patches
+  `~/.continue/config.json` under an `mcpServers` map, coexisting with the
+  existing `contextProviders` array used by the skill side. `capability_exists`
+  reports True for either kind.
+- **Adapter gap matrix** — `docs/adapters.md` was rewritten as a complete
+  reference for all 28 registered adapters, classifying each as Full / Partial
+  / Stub with explicit config targets and caveats. Status counts:
+  **20 Full, 5 Partial, 4 Stub** (cursor + continue-dev promoted from
+  Partial → Full in this release).
+- 6 new tests covering install, remove, and `capability_exists` semantics for
+  the cursor + continue-dev MCP paths.
+
 ## [0.7.1] - 2026-04-25
 
 ### Fixed

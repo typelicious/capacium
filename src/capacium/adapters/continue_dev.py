@@ -6,9 +6,15 @@ from ..storage import StorageManager
 from ..symlink_manager import SymlinkManager
 from ..manifest import Manifest
 from .base import FrameworkAdapter
+from .mcp_config_patcher import McpConfigPatcher
 
 
 class ContinueDevAdapter(FrameworkAdapter):
+
+    # Continue.dev (~2025+) reads MCP servers from the same `~/.continue/config.json`
+    # under an `mcpServers` map. Skill content lives under `contextProviders` in the
+    # same file; the two keys coexist without conflict.
+    MCP_SECTION_KEY = "mcpServers"
 
     def __init__(self):
         self.storage = StorageManager()
@@ -58,14 +64,32 @@ class ContinueDevAdapter(FrameworkAdapter):
     def capability_exists(self, cap_name: str) -> bool:
         config = self._read_config()
         providers = config.get("contextProviders", [])
-        return any(p.get("name") == cap_name for p in providers)
+        if any(p.get("name") == cap_name for p in providers):
+            return True
+        return cap_name in config.get(self.MCP_SECTION_KEY, {})
 
     def install_mcp_server(self, cap_name: str, version: str, source_dir: Path, owner: str = "global") -> bool:
-        print("MCP Server installation not yet natively supported via FrameworkAdapter for Continue.")
-        return False
+        package_dir = self.storage.get_package_dir(cap_name, version, owner=owner)
+        if package_dir.exists():
+            shutil.rmtree(package_dir)
+        shutil.copytree(source_dir, package_dir)
+
+        manifest = Manifest.detect_from_directory(package_dir)
+        mcp_meta = manifest.get_mcp_metadata()
+
+        return McpConfigPatcher.inject_json_mcp_server(
+            config_path=self.config_path,
+            server_key=cap_name,
+            mcp_section_key=self.MCP_SECTION_KEY,
+            cap_name=cap_name,
+            source_dir=package_dir,
+            mcp_meta=mcp_meta,
+        )
 
     def remove_mcp_server(self, cap_name: str, owner: str = "global") -> bool:
-        return False
+        return McpConfigPatcher.remove_json_mcp_server(
+            self.config_path, cap_name, self.MCP_SECTION_KEY,
+        )
 
     def list_capabilities(self) -> List[str]:
         config = self._read_config()

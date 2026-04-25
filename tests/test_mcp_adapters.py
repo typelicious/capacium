@@ -319,6 +319,147 @@ class TestClineAdapter:
         assert "cline-test" in data["servers"]
 
 
+class TestCursorAdapterMcp:
+    """Cursor MCP support added in v0.7.1.
+
+    Cursor's MCP config lives at ~/.cursor/mcp.json (global) or
+    <project>/.cursor/mcp.json (project-local) and uses the standard
+    `mcpServers` JSON map.
+    """
+
+    def test_install_writes_global_mcp_when_no_project_dir(self, tmp_path):
+        from capacium.adapters.cursor import CursorAdapter
+
+        adapter = CursorAdapter()
+        # Force a clean state — neither project nor global cursor dirs exist yet.
+        adapter.project_mcp_path = tmp_path / "no-cwd-project" / ".cursor" / "mcp.json"
+        adapter.global_mcp_path = tmp_path / "global" / ".cursor" / "mcp.json"
+
+        source = tmp_path / "source"
+        source.mkdir()
+        (source / "capability.yaml").write_text(
+            "kind: mcp-server\nname: cursor-test\nversion: 1.0.0\n"
+            "mcp:\n  transport: stdio\n  command: uvx\n  args: [cursor-test]\n"
+        )
+
+        with patch.object(adapter.storage, "get_package_dir", return_value=tmp_path / "pkg"):
+            assert adapter.install_mcp_server("cursor-test", "1.0.0", source) is True
+
+        # No project ./cursor/ exists in cwd, so global path is used.
+        data = json.loads(adapter.global_mcp_path.read_text())
+        assert "mcpServers" in data
+        assert "cursor-test" in data["mcpServers"]
+        assert data["mcpServers"]["cursor-test"]["command"] == "uvx"
+
+    def test_remove_clears_global_mcp(self, tmp_path):
+        from capacium.adapters.cursor import CursorAdapter
+
+        adapter = CursorAdapter()
+        adapter.project_mcp_path = tmp_path / "ne" / ".cursor" / "mcp.json"
+        adapter.global_mcp_path = tmp_path / "global" / ".cursor" / "mcp.json"
+        adapter.global_mcp_path.parent.mkdir(parents=True, exist_ok=True)
+        adapter.global_mcp_path.write_text(
+            json.dumps({"mcpServers": {"x": {"command": "echo"}}})
+        )
+
+        assert adapter.remove_mcp_server("x") is True
+        data = json.loads(adapter.global_mcp_path.read_text())
+        assert "x" not in data.get("mcpServers", {})
+
+    def test_capability_exists_checks_both_rules_and_mcp(self, tmp_path):
+        from capacium.adapters.cursor import CursorAdapter
+
+        adapter = CursorAdapter()
+        adapter.project_rules_dir = tmp_path / "no-rules"
+        adapter.global_rules_dir = tmp_path / "global-rules"
+        adapter.project_mcp_path = tmp_path / "ne" / ".cursor" / "mcp.json"
+        adapter.global_mcp_path = tmp_path / "global" / ".cursor" / "mcp.json"
+
+        # Neither registered yet
+        assert adapter.capability_exists("nope") is False
+
+        # Register via MCP only
+        adapter.global_mcp_path.parent.mkdir(parents=True, exist_ok=True)
+        adapter.global_mcp_path.write_text(
+            json.dumps({"mcpServers": {"yep": {"command": "echo"}}})
+        )
+        assert adapter.capability_exists("yep") is True
+
+
+class TestContinueDevAdapterMcp:
+    """Continue.dev MCP support added in v0.7.1.
+
+    Continue stores MCP servers under an `mcpServers` map in the same
+    `~/.continue/config.json` it uses for `contextProviders` (skill side).
+    The two keys coexist without conflict.
+    """
+
+    def test_install_adds_mcp_servers_section(self, tmp_path):
+        from capacium.adapters.continue_dev import ContinueDevAdapter
+
+        adapter = ContinueDevAdapter()
+        adapter.config_dir = tmp_path / "continue"
+        adapter.config_path = adapter.config_dir / "config.json"
+        adapter.config_dir.mkdir(parents=True, exist_ok=True)
+        adapter.config_path.write_text(
+            json.dumps({"contextProviders": [{"name": "existing-skill"}]})
+        )
+
+        source = tmp_path / "source"
+        source.mkdir()
+        (source / "capability.yaml").write_text(
+            "kind: mcp-server\nname: continue-mcp\nversion: 1.0.0\n"
+            "mcp:\n  transport: stdio\n  command: node\n  args: [server.js]\n"
+        )
+
+        with patch.object(adapter.storage, "get_package_dir", return_value=tmp_path / "pkg"):
+            assert adapter.install_mcp_server("continue-mcp", "1.0.0", source) is True
+
+        data = json.loads(adapter.config_path.read_text())
+        # Pre-existing skill side untouched
+        assert data["contextProviders"] == [{"name": "existing-skill"}]
+        # New MCP entry alongside it
+        assert "mcpServers" in data
+        assert "continue-mcp" in data["mcpServers"]
+        assert data["mcpServers"]["continue-mcp"]["command"] == "node"
+
+    def test_remove_only_clears_mcp_section(self, tmp_path):
+        from capacium.adapters.continue_dev import ContinueDevAdapter
+
+        adapter = ContinueDevAdapter()
+        adapter.config_dir = tmp_path / "continue"
+        adapter.config_path = adapter.config_dir / "config.json"
+        adapter.config_dir.mkdir(parents=True, exist_ok=True)
+        adapter.config_path.write_text(json.dumps({
+            "contextProviders": [{"name": "skill-a"}],
+            "mcpServers": {"server-a": {"command": "x"}, "server-b": {"command": "y"}},
+        }))
+
+        assert adapter.remove_mcp_server("server-a") is True
+        data = json.loads(adapter.config_path.read_text())
+        # Skill side untouched
+        assert data["contextProviders"] == [{"name": "skill-a"}]
+        # Only target MCP entry removed
+        assert "server-a" not in data["mcpServers"]
+        assert "server-b" in data["mcpServers"]
+
+    def test_capability_exists_checks_both_sections(self, tmp_path):
+        from capacium.adapters.continue_dev import ContinueDevAdapter
+
+        adapter = ContinueDevAdapter()
+        adapter.config_dir = tmp_path / "continue"
+        adapter.config_path = adapter.config_dir / "config.json"
+        adapter.config_dir.mkdir(parents=True, exist_ok=True)
+        adapter.config_path.write_text(json.dumps({
+            "contextProviders": [{"name": "skill-a"}],
+            "mcpServers": {"mcp-a": {"command": "x"}},
+        }))
+
+        assert adapter.capability_exists("skill-a") is True
+        assert adapter.capability_exists("mcp-a") is True
+        assert adapter.capability_exists("nope") is False
+
+
 class TestAdapterRegistration:
     def test_all_28_adapters_registered(self):
         from capacium.adapters import list_registered_adapters
