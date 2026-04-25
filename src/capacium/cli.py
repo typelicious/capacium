@@ -32,6 +32,12 @@ def main():
 
     update_parser = subparsers.add_parser("update", help="Update a capability")
     update_parser.add_argument("capability", help="Capability specification (owner/name[@version] or name[@version])")
+    update_parser.add_argument("--force", action="store_true", help="Force adapter reconciliation even when content is unchanged")
+    update_parser.add_argument(
+        "--skip-runtime-check",
+        action="store_true",
+        help="Skip the pre-flight runtime check (advanced)",
+    )
 
     remove_parser = subparsers.add_parser("remove", help="Remove a capability")
     remove_parser.add_argument("capability", help="Capability specification (owner/name[@version] or name[@version])")
@@ -124,7 +130,11 @@ def main():
 
         elif args.command == "update":
             from .commands.update import update_capability
-            success = update_capability(args.capability)
+            success = update_capability(
+                args.capability,
+                force=getattr(args, "force", False),
+                skip_runtime_check=getattr(args, "skip_runtime_check", False),
+            )
             sys.exit(0 if success else 1)
 
         elif args.command == "remove":
@@ -210,4 +220,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

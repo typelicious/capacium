@@ -133,6 +133,40 @@ class McpConfigPatcher:
             entry["env"] = env
         return entry
 
+    @staticmethod
+    def build_opencode_mcp_entry(
+        cap_name: str,
+        source_dir: Path,
+        mcp_meta: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Build an OpenCode-native MCP server entry.
+
+        OpenCode stores MCP servers under an ``mcp`` map. Local stdio servers use
+        ``{"type": "local", "command": ["cmd", "...args"], "enabled": true}``,
+        not the Claude-style ``mcpServers`` shape.
+        """
+        meta = mcp_meta or {}
+        transport = meta.get("transport", "stdio")
+
+        if transport in ("sse", "streamable-http"):
+            return {
+                "type": "remote",
+                "url": meta.get("url", f"http://localhost:3000/{cap_name}"),
+                "enabled": True,
+            }
+
+        stdio = McpConfigPatcher.build_mcp_entry(cap_name, source_dir, meta)
+        command = stdio.get("command", "")
+        args = stdio.get("args", [])
+        entry: Dict[str, Any] = {
+            "type": "local",
+            "command": [command, *args],
+            "enabled": True,
+        }
+        if stdio.get("env"):
+            entry["env"] = stdio["env"]
+        return entry
+
     @classmethod
     def inject_json_mcp_server(
         cls,

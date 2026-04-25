@@ -5,7 +5,7 @@
 [![Release](https://img.shields.io/github/v/release/Capacium/capacium?display_name=tag)](https://github.com/Capacium/capacium/releases)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](./pyproject.toml)
-[![Tests](https://img.shields.io/badge/tests-213%20passing-green.svg)](./tests/)
+[![Tests](https://img.shields.io/badge/tests-298%20passing-green.svg)](./tests/)
 
 Capability-native packaging for the AI agent era.
 
@@ -21,10 +21,10 @@ Works fully offline from local paths. The V2 Exchange layer adds an open discove
 You can install Capacium globally in an isolated environment using `pipx`.
 
 ```bash
-pipx install git+https://github.com/Capacium/capacium.git@v0.5.0
+pipx install git+https://github.com/Capacium/capacium.git@v0.7.3
 
 # Or with optional signing and YAML support:
-pipx install "capacium[yaml,signing] @ git+https://github.com/Capacium/capacium.git@v0.5.0"
+pipx install "capacium[yaml,signing] @ git+https://github.com/Capacium/capacium.git@v0.7.3"
 ```
 
 *(Note: PyPI publishing `pip install capacium` is pending organization approval and currently unavailable).*
@@ -35,7 +35,7 @@ If you don't use Python, you can download standalone executables directly from t
 ### 3. Docker (GHCR)
 Run Capacium safely in a container with your directories mounted:
 ```bash
-docker run --rm -v ~/.capacium:/root/.capacium -v $(pwd):/workspace ghcr.io/capacium/cap:0.5.0
+docker run --rm -v ~/.capacium:/root/.capacium -v $(pwd):/workspace ghcr.io/capacium/cap:0.7.3
 ```
 
 ### 4. macOS / Linux (Homebrew)

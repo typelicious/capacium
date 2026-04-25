@@ -15,7 +15,7 @@ class StorageManager:
     def _maybe_migrate_old_structure(self) -> None:
         has_old_structure = False
         for item in self.base_dir.iterdir():
-            if item.is_dir() and item.name != "global":
+            if item.is_dir() and item.name != "global" and self._looks_like_old_cap_dir(item):
                 has_old_structure = True
                 break
 
@@ -23,6 +23,21 @@ class StorageManager:
             migrated = self.migrate_old_structure()
             if migrated > 0:
                 print(f"Migrated {migrated} capabilities to owner/name hierarchy.")
+
+    @staticmethod
+    def _looks_like_old_cap_dir(path: Path) -> bool:
+        """Return True for legacy ``packages/<name>/<version>`` directories.
+
+        The owner/name hierarchy also has non-``global`` first-level folders
+        (for example ``packages/MemPalace/mempalace/1.0.0``). Only migrate a
+        first-level folder when its direct children look like version
+        directories containing a capability manifest.
+        """
+        manifest_names = {"capability.yaml", "capability.yml", "capability.json", ".skillpkg.json"}
+        for child in path.iterdir():
+            if child.is_dir() and any((child / name).exists() for name in manifest_names):
+                return True
+        return False
 
     @staticmethod
     def parse_cap_id(cap_id: str) -> Tuple[str, str]:
@@ -121,7 +136,7 @@ class StorageManager:
     def migrate_old_structure(self) -> int:
         migrated = 0
         for cap_dir in self.base_dir.iterdir():
-            if cap_dir.is_dir() and cap_dir.name != "global":
+            if cap_dir.is_dir() and cap_dir.name != "global" and self._looks_like_old_cap_dir(cap_dir):
                 target_dir = self.base_dir / "global" / cap_dir.name
                 if target_dir.exists():
                     continue

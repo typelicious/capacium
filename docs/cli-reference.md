@@ -58,7 +58,13 @@ Update a capability to the latest compatible version.
 
 ```bash
 cap update <capability>
+cap update <capability> --force
+cap update <capability> --skip-runtime-check
 ```
+
+Options:
+- `--force` — Reconcile adapter configuration even when package content is unchanged
+- `--skip-runtime-check` — Skip MCP runtime pre-flight checks during update
 
 ### `cap search`
 

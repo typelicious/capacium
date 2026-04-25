@@ -41,35 +41,57 @@ class OpenCodeAdapter(FrameworkAdapter):
 
     def capability_exists(self, cap_name: str) -> bool:
         link_path = self.opencode_skills_dir / cap_name
-        return link_path.exists() and link_path.is_symlink()
+        if link_path.exists() and link_path.is_symlink():
+            return True
+
+        from .mcp_config_patcher import McpConfigPatcher
+        config_path = Path.home() / ".config" / "opencode" / "opencode.json"
+        return (
+            McpConfigPatcher.mcp_server_exists_json(config_path, cap_name, "mcp")
+            or McpConfigPatcher.mcp_server_exists_json(config_path, cap_name, "mcpServers")
+        )
 
     def install_mcp_server(self, cap_name: str, version: str, source_dir: Path, owner: str = "global") -> bool:
         from .mcp_config_patcher import McpConfigPatcher
         package_dir = self.storage.get_package_dir(cap_name, version, owner=owner)
-        if package_dir.exists():
+        if package_dir.exists() and package_dir.resolve() != source_dir.resolve():
             shutil.rmtree(package_dir)
-        shutil.copytree(source_dir, package_dir)
+        if package_dir.resolve() != source_dir.resolve():
+            shutil.copytree(source_dir, package_dir)
 
         from ..manifest import Manifest
         manifest = Manifest.detect_from_directory(package_dir)
         mcp_meta = manifest.get_mcp_metadata()
         config_path = Path.home() / ".config" / "opencode" / "opencode.json"
 
-        return McpConfigPatcher.inject_json_mcp_server(
-            config_path=config_path,
-            server_key=cap_name,
-            mcp_section_key="mcpServers",
-            cap_name=cap_name,
-            source_dir=package_dir,
-            mcp_meta=mcp_meta,
+        McpConfigPatcher.backup(config_path)
+        config = McpConfigPatcher.read_json(config_path)
+        servers = config.setdefault("mcp", {})
+        servers[cap_name] = McpConfigPatcher.build_opencode_mcp_entry(
+            cap_name, package_dir, mcp_meta,
         )
+
+        # v0.7.2 and older wrote OpenCode MCP servers to the Claude-style
+        # mcpServers block. Remove the stale entry when upgrading/reconciling.
+        legacy_servers = config.get("mcpServers")
+        if isinstance(legacy_servers, dict):
+            legacy_servers.pop(cap_name, None)
+            if not legacy_servers:
+                config.pop("mcpServers", None)
+
+        McpConfigPatcher.write_json(config_path, config)
+        return True
 
     def remove_mcp_server(self, cap_name: str, owner: str = "global") -> bool:
         from .mcp_config_patcher import McpConfigPatcher
         config_path = Path.home() / ".config" / "opencode" / "opencode.json"
-        return McpConfigPatcher.remove_json_mcp_server(
+        removed_current = McpConfigPatcher.remove_json_mcp_server(
+            config_path, cap_name, "mcp",
+        )
+        removed_legacy = McpConfigPatcher.remove_json_mcp_server(
             config_path, cap_name, "mcpServers",
         )
+        return removed_current and removed_legacy
 
     def get_capability_metadata(self, cap_name: str) -> Optional[Dict[str, Any]]:
         link_path = self.opencode_skills_dir / cap_name

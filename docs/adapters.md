@@ -12,7 +12,7 @@ capability. The table below records which adapters fully patch a real client
 config end-to-end, which work with caveats, and which intentionally print
 guidance only because the target client has no local config to patch.
 
-Updated for **v0.7.1** (2026-04-25). When you add or upgrade an adapter,
+Updated for **v0.7.3** (2026-04-26). When you add or upgrade an adapter,
 update this table in the same PR.
 
 ### Legend
@@ -30,7 +30,7 @@ update this table in the same PR.
 
 | Adapter ID         | Status | Skill | MCP | Config target |
 |--------------------|:------:|:-----:|:---:|---|
-| `opencode`         | ✅ | ✅ symlink | ✅ JSON | `~/.opencode/skills/`, `~/.opencode/mcp.json` |
+| `opencode`         | ✅ | ✅ symlink | ✅ JSON | `~/.opencode/skills/`, `~/.config/opencode/opencode.json` (`mcp` section) |
 | `opencode-command` | 🟨 | ✅ commands | — | `~/.opencode/commands/` (skill-only by design — Opencode commands cannot act as MCP servers) |
 | `claude-code`      | ✅ | ✅ symlink | ✅ JSON | `~/.claude/skills/`, claude-code MCP config |
 | `claude-desktop`   | ✅ | n/a | ✅ JSON | `~/Library/Application Support/Claude/claude_desktop_config.json` (cross-platform paths handled) |

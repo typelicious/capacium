@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Capacium v0.7.3] - 2026-04-26
+
+### Fixed
+- **OpenCode MCP activation** — `opencode` now writes MCP servers to the active
+  `mcp` config section using OpenCode's native `type: local` / command-array
+  shape. Older Capacium releases wrote the Claude-style `mcpServers` section,
+  which left servers installed but inactive in OpenCode.
+- **MCP reconciliation on update** — `cap update` now re-applies adapter config
+  even when package content is unchanged, so config drift can be repaired without
+  removing and reinstalling the capability.
+- **Unqualified update lookup** — `cap update mempalace` resolves to an installed
+  unique owner/name such as `MemPalace/mempalace`; ambiguous names now print the
+  explicit capability IDs to use.
+- **Owner storage migration** — startup migration no longer treats legitimate
+  owner directories such as `MemPalace/` as legacy package folders.
+
+### Added
+- `cap update --force` and `cap update --skip-runtime-check` for explicit
+  adapter reconciliation and advanced runtime bypasses.
+
 ## [0.7.2] - 2026-04-25
 
 ### Added

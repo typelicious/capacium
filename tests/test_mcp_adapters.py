@@ -460,6 +460,62 @@ class TestContinueDevAdapterMcp:
         assert adapter.capability_exists("nope") is False
 
 
+class TestOpenCodeAdapterMcp:
+    def test_install_writes_opencode_native_mcp_section(self, tmp_home, tmp_path):
+        from capacium.adapters.opencode import OpenCodeAdapter
+
+        adapter = OpenCodeAdapter()
+        config_path = tmp_home / ".config" / "opencode" / "opencode.json"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(json.dumps({
+            "mcp": {
+                "icm": {
+                    "type": "local",
+                    "command": ["/opt/homebrew/bin/icm", "serve"],
+                    "enabled": True,
+                }
+            },
+            "mcpServers": {
+                "mempalace": {"command": "uvx", "args": ["old-shape"]}
+            },
+        }))
+
+        source = tmp_path / "source"
+        source.mkdir()
+        (source / "capability.yaml").write_text(
+            "kind: mcp-server\nname: mempalace\nversion: 1.0.0\n"
+            "frameworks: [opencode]\n"
+            "mcp:\n  transport: stdio\n  command: uvx\n  args: [mempalace-mcp]\n"
+        )
+
+        with patch.object(adapter.storage, "get_package_dir", return_value=tmp_path / "pkg"):
+            assert adapter.install_mcp_server("mempalace", "1.0.0", source) is True
+
+        data = json.loads(config_path.read_text())
+        assert data["mcp"]["icm"]["command"] == ["/opt/homebrew/bin/icm", "serve"]
+        assert data["mcp"]["mempalace"] == {
+            "type": "local",
+            "command": ["uvx", "mempalace-mcp"],
+            "enabled": True,
+        }
+        assert "mempalace" not in data.get("mcpServers", {})
+
+    def test_capability_exists_checks_opencode_mcp_sections(self, tmp_home):
+        from capacium.adapters.opencode import OpenCodeAdapter
+
+        config_path = tmp_home / ".config" / "opencode" / "opencode.json"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(json.dumps({
+            "mcp": {"mcp-a": {"type": "local", "command": ["echo"]}},
+            "mcpServers": {"legacy-a": {"command": "echo"}},
+        }))
+
+        adapter = OpenCodeAdapter()
+        assert adapter.capability_exists("mcp-a") is True
+        assert adapter.capability_exists("legacy-a") is True
+        assert adapter.capability_exists("missing") is False
+
+
 class TestAdapterRegistration:
     def test_all_28_adapters_registered(self):
         from capacium.adapters import list_registered_adapters
