@@ -161,6 +161,27 @@ src/capacium/
 - Lock enforcement checks: capability fingerprint, dependency versions, dependency fingerprints
 - Lock files are serialized as YAML (preferred) or JSON (fallback)
 
+## Multi-Repo Topology
+
+Capacium is distributed across multiple public GitHub repos under the `Capacium` org. See `docs/repo-topology.md` for detailed dependency graph.
+
+| Repo | Domain | Stack | CI |
+|------|--------|-------|----|
+| `Capacium/capacium` | Core CLI, manifest, packaging | Python (stdlib) | pytest |
+| `Capacium/capacium-exchange` | Exchange API server | FastAPI / SQLAlchemy / PostgreSQL | pytest |
+| `Capacium/capacium-crawler` | Agent network discovery crawler | Python (stdlib, urllib) | pytest |
+| `Capacium/capacium-bridge` | WordPress plugin | PHP | — |
+| `Capacium/homebrew-tap` | Homebrew formula | Ruby | test-bot |
+| `Capacium/capacium-action-validate` | GitHub Action manifest validation | Composite action (YAML + Python) | pytest |
+| `Capacium/capacium-github-app` | GitHub App webhook server | Python (stdlib, WSGI) | pytest |
+
+### Dependency Direction
+Core → Exchange → Crawler / Bridge (no reverse imports). Action and App depend on Core. Tap wraps Core binary.
+
+### Key Integration Repos
+- **capacium-action-validate**: GitHub Marketplace Action. Validates `capability.yaml` on CI: schema, fingerprint, linting. Outputs Exchange-ready metadata.
+- **capacium-github-app**: GitHub App webhook server. Syncs repos to Exchange on push/release. Derives claim signals from installation context.
+
 ## Adapter System
 
 - `FrameworkAdapter` ABC with `install_capability`, `remove_capability`, `capability_exists`
