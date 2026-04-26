@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from ..registry import Registry
+from ..storage import StorageManager
 from ..versioning import VersionManager
 from ..fingerprint import compute_fingerprint
 from ..manifest import Manifest
@@ -143,6 +144,7 @@ def update_capability(
     cap.framework = frameworks[0]
     cap.installed_at = datetime.now()
     registry.update_capability(cap)
+    StorageManager.write_meta(cap)
 
     print(f"Updated {cap_label}")
 

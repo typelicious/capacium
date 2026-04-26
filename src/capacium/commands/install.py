@@ -94,6 +94,8 @@ def install_capability(
         print(f"Install aborted: lock enforcement failed for {cap_id}@{version}")
         return False
 
+    StorageManager.write_meta(cap)
+
     print(f"Installed {cap_id}@{version} (fingerprint: {fingerprint[:8]}...)")
     return True
 
@@ -188,6 +190,7 @@ def _install_single_sub_cap(
     )
 
     registry.add_capability(capacity)
+    StorageManager.write_meta(capacity)
 
 
 def _resolve_source_path(source_raw: str, bundle_dir: Path) -> Path:

@@ -1,6 +1,8 @@
+import json
 import shutil
 from pathlib import Path
 from typing import Optional, Tuple
+from .models import Capability
 
 
 class StorageManager:
@@ -102,6 +104,22 @@ class StorageManager:
             link_path.unlink()
             return True
         return False
+
+    @staticmethod
+    def write_meta(cap: Capability) -> None:
+        meta_dir = Path.home() / ".capacium" / "meta" / cap.owner
+        meta_dir.mkdir(parents=True, exist_ok=True)
+        meta_path = meta_dir / f"{cap.name}.json"
+        data = {
+            "name": cap.name,
+            "owner": cap.owner,
+            "version": cap.version,
+            "kind": cap.kind.value,
+            "fingerprint": cap.fingerprint,
+            "install_path": str(cap.install_path) if cap.install_path else "",
+            "installed_at": cap.installed_at.isoformat() if cap.installed_at else "",
+        }
+        meta_path.write_text(json.dumps(data, indent=2) + "\n")
 
     def get_storage_usage(self) -> Tuple[int, int]:
         total_size = 0
