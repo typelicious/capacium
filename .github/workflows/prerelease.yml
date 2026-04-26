@@ -38,6 +38,17 @@ jobs:
       - name: Test with pytest
         run: python -m pytest tests/ -v --tb=short --cov=src/capacium
 
+      - name: Validate README version references
+        run: |
+          VERSION="${{ inputs.version }}"
+          if ! grep -q "@v${VERSION}" README.md; then
+            echo "ERROR: README.md references are not updated to v${VERSION}. Please update all install examples before cutting a release."
+            echo "  Run: sed -i 's/@v[0-9.]*/@v${VERSION}/g' README.md"
+            echo "  Run: sed -i 's|ghcr.io/capacium/cap:[0-9.]*|ghcr.io/capacium/cap:${VERSION}|g' README.md"
+            exit 1
+          fi
+          echo "README version references match v${VERSION}."
+
       - name: Determine next RC number
         id: next_rc
         run: |
