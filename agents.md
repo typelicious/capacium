@@ -118,6 +118,13 @@ src/capacium/
 - Runtimes field (v0.7.0+) declares host-level runtime requirements
   (e.g. `uv: ">=0.4.0"`, `node: ">=20"`); validated pre-flight by `cap install`
 
+### Agent Metadata (.cap-meta.json)
+- Written by `cap install` / `cap update` into the install directory
+- Fields: `name`, `version`, `fingerprint`, `installed_at`
+- Agents can read it via framework symlink, e.g.: `~/.opencode/skills/<name>/.cap-meta.json`
+- Namespaced as `.cap-*` to signal Capacium ownership
+- Does NOT modify original capability files
+
 ### Releases
 - Language requirement: All release notes and changelogs MUST be written in English.
 - Naming convention: `Capacium vX.Y.Z` (e.g., `Capacium v1.0.0`, `Capacium v2.5.1`)
