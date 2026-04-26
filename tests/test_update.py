@@ -1,6 +1,5 @@
 import json
 import subprocess
-from pathlib import Path
 
 
 def test_update_reconciles_unique_unqualified_mcp_name(tmp_home, tmp_path):
