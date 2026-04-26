@@ -1,0 +1,54 @@
+=== Capacium Integration Session — Final Checkpoint ===
+Date: 2026-04-26
+Status: Both tracks complete
+
+=== What Was Done ===
+
+TRACK 1 (Distributed Repo Strategy — 4 tasks):
+- TRACK1-AUDIT-001: docs/repo-boundary-audit.md with full cross-repo audit
+- TRACK1-OWNERSHIP-002: 5 BOUNDARY.md files (core, exchange, crawler, bridge, tap)
+- TRACK1-EXTRACT-003: TrustState removed from models.py, _run_v2_migration removed from registry.py
+- TRACK1-DOCS-004: docs/repo-topology.md with Mermaid dep graph and release coordination
+
+TRACK 2 (GitHub Integration — 7 tasks):
+- TRACK2-ACTION-INFRA: Created Capcacium/capacium-action-validate (public)
+- TRACK2-ACTION-VALIDATE: validate.py with full schema/fingerprint/lint validation
+- TRACK2-ACTION-LINT: Package linting (dot-files, expected files, README) + exchange-metadata.json output
+- TRACK2-APP-INFRA: Created Capcacium/capacium-github-app (public)
+- TRACK2-APP-WEBHOOK: Webhook server, push/release/installation handlers, exchange client, repo discovery
+- TRACK2-APP-CLAIM: Claim signal derivation from GitHub installation context (ownership, org, domain, attestations)
+- TRACK2-APP-DEPLOY: Dockerfile, .env.example, deploy script
+
+PROGRAM:
+- docs/marketplace-listing.md with Developer Program application materials
+- CI workflows for both Action (self-validating) and App (pytest)
+- Marketplace-ready README with badges
+
+=== Test Results ===
+- Core: All imports pass, TrustState gone, dead migration removed, 0 remaining boundary violations
+- App (capacium-github-app): 17/17 tests pass (handlers + claim)
+- Action (capacium-action-validate): 8/8 tests pass (schema + lint + strict mode + metadata)
+- 25 total tests across both integration repos
+
+=== Files Created/Modified ===
+docs/repo-boundary-audit.md         (new)
+docs/core-boundary.md               (new)
+docs/exchange-boundary.md           (new)
+docs/crawler-boundary.md            (new)
+docs/bridge-boundary.md             (new)
+docs/tap-boundary.md                (new)
+docs/repo-topology.md               (new)
+src/capacium/models.py              (modified: TrustState removed)
+src/capacium/registry.py            (modified: _run_v2_migration removed)
+AGENTS.md                           (modified: added Multi-Repo Topology section)
+
+capacium-action-validate/ (new repo)
+  action.yml, src/validate.py, tests/test_validate.py (8 tests)
+  .github/workflows/ci.yml, README.md, LICENSE
+  docs/marketplace-listing.md
+
+capacium-github-app/ (new repo)
+  src/server.py, handlers.py, exchange_client.py, discovery.py, claim.py, config.py
+  tests/test_handlers.py, test_claim.py (17 tests)
+  .github/workflows/ci.yml, Dockerfile, app.yml, .env.example
+  scripts/deploy.sh
