@@ -1,7 +1,7 @@
 # Capacium
 
-[![CI](https://github.com/Capacium/capacium/actions/workflows/ci.yml/badge.svg)](https://github.com/Capacium/capacium/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/Capacium/capacium/actions/workflows/codeql.yml/badge.svg)](https://github.com/Capacium/capacium/actions/workflows/codeql.yml)
+[![CI](https://github.com/Capacium/capacium/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Capacium/capacium/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/Capacium/capacium/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/Capacium/capacium/actions/workflows/codeql.yml)
 [![Release](https://img.shields.io/github/v/release/Capacium/capacium?display_name=tag)](https://github.com/Capacium/capacium/releases)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](./pyproject.toml)
