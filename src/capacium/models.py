@@ -28,6 +28,7 @@ class Capability:
     installed_at: Optional[datetime] = None
     dependencies: Optional[List[str]] = None
     framework: Optional[str] = None
+    source_url: Optional[str] = None
 
     @property
     def id(self) -> str:
@@ -40,6 +41,7 @@ class Capability:
         data["kind"] = self.kind.value
         data["dependencies"] = ",".join(self.dependencies) if self.dependencies else ""
         data["framework"] = self.framework or ""
+        data["source_url"] = self.source_url or ""
         return data
 
     @classmethod

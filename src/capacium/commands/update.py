@@ -26,6 +26,10 @@ FINGERPRINT_EXCLUDES = [
 ]
 
 
+def _is_git_url(url: str) -> bool:
+    return url.startswith("https://") or url.startswith("git@") or url.endswith(".git") or url.startswith("/") or url.startswith("file://")
+
+
 def _parse_version(v: str) -> tuple:
     parts = []
     for p in v.split("."):
@@ -36,46 +40,44 @@ def _parse_version(v: str) -> tuple:
     return tuple(parts)
 
 
-def _fetch_git_tags(install_path: Path) -> List[str]:
+def _fetch_remote_git_tags(repo_url: str) -> List[str]:
     try:
         result = subprocess.run(
-            ["git", "fetch", "--tags", "--prune"],
-            cwd=install_path,
+            ["git", "ls-remote", "--tags", "--sort=-v:refname", repo_url],
             capture_output=True,
             text=True,
             timeout=15,
         )
         if result.returncode != 0:
             return []
-        result = subprocess.run(
-            ["git", "tag", "--list", "--sort=-v:refname"],
-            cwd=install_path,
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode != 0:
-            return []
+        seen = set()
         tags = []
         for line in result.stdout.strip().split("\n"):
-            line = line.strip()
             if not line:
                 continue
-            tag = line[1:] if line.startswith("v") else line
-            if VersionManager.is_valid_version(tag):
+            parts = line.split("\t")
+            if len(parts) != 2:
+                continue
+            ref = parts[1]
+            if ref.endswith("^{}"):
+                continue
+            tag = ref.removeprefix("refs/tags/")
+            tag = tag[1:] if tag.startswith("v") else tag
+            if VersionManager.is_valid_version(tag) and tag not in seen:
+                seen.add(tag)
                 tags.append(tag)
         return tags
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return []
 
 
-def _check_for_newer_version(cap_id: str, current_version: str, install_path: Optional[Path]) -> bool:
-    if install_path and (install_path / ".git").exists():
-        tags = _fetch_git_tags(install_path)
+def _check_for_newer_version(cap_id: str, current_version: str, source_url: Optional[str]) -> bool:
+    if source_url and _is_git_url(source_url):
+        tags = _fetch_remote_git_tags(source_url)
         if tags:
             latest = max(tags, key=_parse_version)
             if _parse_version(latest) > _parse_version(current_version):
-                print(f"  Newer version {latest} found via git tags.")
+                print(f"  Newer version {latest} found via remote tags.")
                 print(f"  Installing {cap_id}@{latest}...")
                 return install_capability(f"{cap_id}@{latest}")
 
@@ -149,7 +151,7 @@ def update_capability(
     print(f"Updated {cap_label}")
 
     if version_spec in ("latest", "stable"):
-        _check_for_newer_version(cap_id, cap.version, cap.install_path)
+        _check_for_newer_version(cap_id, cap.version, cap.source_url)
 
     return True
 

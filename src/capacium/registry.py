@@ -86,6 +86,9 @@ class Registry:
                 cursor.execute("ALTER TABLE capabilities ADD COLUMN kind TEXT NOT NULL DEFAULT 'skill'")
             if "framework" not in col_names:
                 cursor.execute("ALTER TABLE capabilities ADD COLUMN framework TEXT")
+            if "source_url" not in col_names:
+                cursor.execute("ALTER TABLE capabilities ADD COLUMN source_url TEXT")
+                self._backfill_source_urls()
 
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='skills'")
             old_table = cursor.fetchone()
@@ -104,13 +107,54 @@ class Registry:
             cursor = conn.cursor()
             try:
                 cursor.execute("""
-                    INSERT INTO capabilities (owner, name, version, kind, fingerprint, install_path, installed_at, dependencies, framework)
-                    VALUES (:owner, :name, :version, :kind, :fingerprint, :install_path, :installed_at, :dependencies, :framework)
+                    INSERT INTO capabilities (owner, name, version, kind, fingerprint, install_path, installed_at, dependencies, framework, source_url)
+                    VALUES (:owner, :name, :version, :kind, :fingerprint, :install_path, :installed_at, :dependencies, :framework, :source_url)
                 """, cap.to_dict())
                 conn.commit()
                 return True
             except sqlite3.IntegrityError:
                 return False
+
+    def _backfill_source_urls(self):
+        """Attempt to backfill source_url from install_path/.git config for existing entries."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT id, install_path FROM capabilities WHERE source_url IS NULL OR source_url = ''"
+            )
+            rows = cursor.fetchall()
+            for row in rows:
+                cap_id_val, install_path_val = row
+                if not install_path_val:
+                    continue
+                install_path = Path(install_path_val)
+                source_url = self._detect_git_remote(install_path)
+                if source_url:
+                    cursor.execute(
+                        "UPDATE capabilities SET source_url = ? WHERE id = ?",
+                        (source_url, cap_id_val)
+                    )
+            conn.commit()
+
+    @staticmethod
+    def _detect_git_remote(install_path: Path) -> Optional[str]:
+        git_dir = install_path / ".git"
+        if not git_dir.exists():
+            return None
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["git", "remote", "get-url", "origin"],
+                cwd=install_path,
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode == 0:
+                return result.stdout.strip()
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
+        return None
 
     def get_capability(self, cap_id: str, version: Optional[str] = None) -> Optional[Capability]:
         owner, name = self.parse_cap_id(cap_id)
@@ -200,7 +244,8 @@ class Registry:
                     installed_at = :installed_at,
                     dependencies = :dependencies,
                     kind = :kind,
-                    framework = :framework
+                    framework = :framework,
+                    source_url = :source_url
                 WHERE owner = :owner AND name = :name AND version = :version
             """, cap.to_dict())
             conn.commit()

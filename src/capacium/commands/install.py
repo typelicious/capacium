@@ -75,6 +75,7 @@ def install_capability(
         fingerprint = compute_fingerprint(package_dir, exclude_patterns=[".git", "__pycache__", "*.pyc", ".DS_Store", ".capacium-meta.json", "capability.lock"])
 
     first_fw = (frameworks or ["opencode"])[0]
+    source_url = source_manifest.repository or _detect_git_remote(source_dir)
     cap = Capability(
         owner=owner,
         name=cap_name,
@@ -85,6 +86,7 @@ def install_capability(
         installed_at=datetime.now(),
         dependencies=[],
         framework=first_fw,
+        source_url=source_url,
     )
 
     registry.add_capability(cap)
@@ -177,6 +179,7 @@ def _install_single_sub_cap(
         fingerprint = compute_fingerprint(package_dir, exclude_patterns=[".git", "__pycache__", "*.pyc", ".DS_Store", ".capacium-meta.json", "capability.lock"])
 
     first_fw = (frameworks or ["opencode"])[0]
+    source_url = sub_manifest.repository or _detect_git_remote(source_path)
     capacity = Capability(
         owner=owner,
         name=sub_name,
@@ -187,6 +190,7 @@ def _install_single_sub_cap(
         installed_at=datetime.now(),
         dependencies=[],
         framework=first_fw,
+        source_url=source_url,
     )
 
     registry.add_capability(capacity)
@@ -198,6 +202,26 @@ def _resolve_source_path(source_raw: str, bundle_dir: Path) -> Path:
     if p.is_absolute():
         return p
     return (bundle_dir / p).resolve()
+
+
+def _detect_git_remote(source_dir: Path) -> Optional[str]:
+    git_dir = source_dir / ".git"
+    if not git_dir.exists():
+        return None
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            cwd=source_dir,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        pass
+    return None
 
 
 def _preflight_runtimes(manifest: Manifest) -> bool:

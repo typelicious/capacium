@@ -74,26 +74,69 @@ def test_parse_version_orders_correctly():
     assert _parse_version("1.0.0") == _parse_version("1.0.0")
 
 
-def test_fetch_git_tags_finds_newer_tags(tmp_path):
-    source = tmp_path / "test-cap"
-    source.mkdir()
-    (source / "capability.yaml").write_text("kind: skill\nname: test-cap\nversion: 1.0.0\n")
-    subprocess.run(["git", "init"], cwd=source, capture_output=True)
-    subprocess.run(["git", "config", "user.email", "t@t"], cwd=source, capture_output=True)
-    subprocess.run(["git", "config", "user.name", "t"], cwd=source, capture_output=True)
-    subprocess.run(["git", "add", "."], cwd=source, capture_output=True)
-    subprocess.run(["git", "commit", "-m", "init"], cwd=source, capture_output=True)
-    subprocess.run(["git", "tag", "v1.0.0"], cwd=source, capture_output=True)
-    subprocess.run(["git", "tag", "v2.0.0"], cwd=source, capture_output=True)
+def test_is_git_url_accepts_http_and_ssh():
+    from capacium.commands.update import _is_git_url
+    assert _is_git_url("https://github.com/foo/bar.git")
+    assert _is_git_url("git@github.com:foo/bar.git")
+    assert not _is_git_url("")
 
-    from capacium.commands.update import _fetch_git_tags
-    tags = _fetch_git_tags(source)
+
+def test_fetch_remote_git_tags_finds_newer_tags(tmp_path):
+    remote = tmp_path / "remote-repo"
+    remote.mkdir()
+    subprocess.run(["git", "init", "--bare"], cwd=remote, capture_output=True)
+
+    clone = tmp_path / "clone"
+    clone.mkdir()
+    subprocess.run(["git", "init"], cwd=clone, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=clone, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=clone, capture_output=True)
+    (clone / "readme.md").write_text("hello")
+    subprocess.run(["git", "add", "."], cwd=clone, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=clone, capture_output=True)
+    subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=clone, capture_output=True)
+    subprocess.run(["git", "push", "origin", "main"], cwd=clone, capture_output=True)
+    subprocess.run(["git", "tag", "v1.0.0"], cwd=clone, capture_output=True)
+    subprocess.run(["git", "tag", "v2.0.0"], cwd=clone, capture_output=True)
+    subprocess.run(["git", "push", "origin", "--tags"], cwd=clone, capture_output=True)
+
+    from capacium.commands.update import _fetch_remote_git_tags
+    tags = _fetch_remote_git_tags(str(remote))
     assert "1.0.0" in tags
     assert "2.0.0" in tags
 
 
-def test_fetch_git_tags_no_git_dir(tmp_path):
-    source = tmp_path / "no-git"
-    source.mkdir()
-    from capacium.commands.update import _fetch_git_tags
-    assert _fetch_git_tags(source) == []
+def test_fetch_remote_git_tags_no_remote():
+    from capacium.commands.update import _fetch_remote_git_tags
+    tags = _fetch_remote_git_tags("https://invalid.local/repo.git")
+    assert tags == []
+
+
+def test_check_for_newer_version_via_remote(tmp_path):
+    remote = tmp_path / "remote-repo"
+    remote.mkdir()
+    subprocess.run(["git", "init", "--bare"], cwd=remote, capture_output=True)
+
+    clone = tmp_path / "clone"
+    clone.mkdir()
+    subprocess.run(["git", "init"], cwd=clone, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "t@t"], cwd=clone, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=clone, capture_output=True)
+    (clone / "capability.yaml").write_text(
+        "kind: skill\nname: test-cap\nversion: 2.0.0\n"
+    )
+    subprocess.run(["git", "add", "."], cwd=clone, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=clone, capture_output=True)
+    subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=clone, capture_output=True)
+    subprocess.run(["git", "push", "origin", "main"], cwd=clone, capture_output=True)
+    subprocess.run(["git", "tag", "v2.0.0"], cwd=clone, capture_output=True)
+    subprocess.run(["git", "push", "origin", "--tags"], cwd=clone, capture_output=True)
+
+    from capacium.commands.update import _check_for_newer_version
+    from unittest.mock import patch
+    with patch("capacium.commands.update.install_capability", return_value=True) as mock:
+        result = _check_for_newer_version(
+            "global/test-cap", "1.0.0", str(remote)
+        )
+        assert result is True
+        mock.assert_called_once_with("global/test-cap@2.0.0")
