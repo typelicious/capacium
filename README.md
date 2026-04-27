@@ -5,7 +5,7 @@
 [![Release](https://img.shields.io/github/v/release/Capacium/capacium?display_name=tag)](https://github.com/Capacium/capacium/releases)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](./pyproject.toml)
-[![Tests](https://img.shields.io/badge/tests-298%20passing-green.svg)](./tests/)
+[![Tests](https://img.shields.io/badge/tests-320%20passing-green.svg)](./tests/)
 
 Capability-native packaging for the AI agent era.
 
