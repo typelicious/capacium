@@ -1,4 +1,7 @@
+import re
 import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 from typing import Optional, List
 from datetime import datetime
@@ -15,6 +18,8 @@ from ..runtimes import (
     infer_required_runtimes,
 )
 
+_GITHUB_SHORT_RE = re.compile(r"^([\w.-]+/[\w.-]+)$")
+
 
 def install_capability(
     cap_spec: str,
@@ -22,14 +27,26 @@ def install_capability(
     no_lock: bool = False,
     skip_runtime_check: bool = False,
 ) -> bool:
-    if source_dir is None:
-        source_dir = Path.cwd()
-
     spec = VersionManager.parse_version_spec(cap_spec)
     owner = spec["owner"]
     cap_name = spec["skill"]
     version_spec = spec["version"]
     cap_id = f"{owner}/{cap_name}"
+
+    source_url = None
+    if source_dir is None:
+        cwd = Path.cwd()
+        manifest = Manifest.detect_from_directory(cwd)
+        if manifest.name == cwd.name and manifest.version == "1.0.0" and not (cwd / "capability.yaml").exists():
+            print(f"No capability source specified and current directory ({cwd}) does not appear to be a valid capability.")
+            print("Usage: cap install <owner/name> --source <path|url|owner/repo>")
+            return False
+        source_dir = cwd
+    else:
+        resolved = _resolve_source(source_dir)
+        if resolved is None:
+            return False
+        source_dir, source_url = resolved
 
     if version_spec in ["latest", "stable"]:
         version = VersionManager.detect_version(source_dir)
@@ -75,7 +92,8 @@ def install_capability(
         fingerprint = compute_fingerprint(package_dir, exclude_patterns=[".git", "__pycache__", "*.pyc", ".DS_Store", ".capacium-meta.json", "capability.lock"])
 
     first_fw = (frameworks or ["opencode"])[0]
-    source_url = source_manifest.repository or _detect_git_remote(source_dir)
+    if not source_url:
+        source_url = source_manifest.repository or _detect_git_remote(source_dir)
     cap = Capability(
         owner=owner,
         name=cap_name,
@@ -204,12 +222,154 @@ def _resolve_source_path(source_raw: str, bundle_dir: Path) -> Path:
     return (bundle_dir / p).resolve()
 
 
+def _is_git_remote_url(value: str) -> bool:
+    return value.startswith("https://") or value.startswith("git@") or value.startswith("http://")
+
+
+def _resolve_source(source: Path) -> Optional[tuple[Path, Optional[str]]]:
+    s = str(source)
+
+    if _is_git_remote_url(s) or _GITHUB_SHORT_RE.match(s):
+        return _clone_remote_source(s)
+
+    p = Path(s)
+    if p.exists():
+        remote = _detect_git_remote(p)
+        return p, remote
+
+    print(f"Source not found: {s}")
+    return None
+
+
+def _clone_remote_source(source_str: str) -> Optional[tuple[Path, Optional[str]]]:
+    if _GITHUB_SHORT_RE.match(source_str):
+        url = f"https://github.com/{source_str}.git"
+    elif _is_git_remote_url(source_str):
+        url = source_str
+    else:
+        print(f"Unrecognised source: {source_str}")
+        return None
+
+    tmp_dir = Path(tempfile.mkdtemp(prefix="cap-source-"))
+    print(f"  Cloning {url}...")
+    try:
+        result = subprocess.run(
+            ["git", "clone", "--depth=1", url, str(tmp_dir / "repo")],
+            capture_output=True, text=True, timeout=60,
+        )
+        if result.returncode != 0:
+            print(f"  Clone failed: {result.stderr.strip()}")
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+            return None
+    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+        print(f"  Clone failed: {e}")
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        return None
+
+    repo_dir = tmp_dir / "repo"
+    manifest = Manifest.detect_from_directory(repo_dir)
+    if not manifest.name or manifest.name == repo_dir.name and manifest.version == "1.0.0":
+        _auto_generate_manifest(repo_dir, url)
+
+    return repo_dir, url
+
+
+def _fetch_remote_tags(repo_url: str) -> List[str]:
+    try:
+        result = subprocess.run(
+            ["git", "ls-remote", "--tags", repo_url],
+            capture_output=True, text=True, timeout=15,
+        )
+        if result.returncode != 0:
+            return []
+        seen = set()
+        tags = []
+        for line in result.stdout.strip().split("\n"):
+            if not line:
+                continue
+            ref = line.split("\t")[1] if "\t" in line else ""
+            if ref.endswith("^{}") or not ref.startswith("refs/tags/"):
+                continue
+            tag = ref.removeprefix("refs/tags/")
+            tag = tag[1:] if tag.startswith("v") else tag
+            if VersionManager.is_valid_version(tag) and tag not in seen:
+                seen.add(tag)
+                tags.append(tag)
+        return tags
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return []
+
+
+def _auto_generate_manifest(repo_dir: Path, repo_url: str) -> None:
+    dest = repo_dir / "capability.yaml"
+    if dest.exists():
+        return
+
+    name = repo_dir.name
+    owner = "unknown"
+
+    m = re.search(r"github\.com[:/]([^/]+)/([^/.]+)", repo_url)
+    if m:
+        owner = m.group(1)
+        name = m.group(2)
+
+    tags = _fetch_remote_tags(repo_url)
+    version = "1.0.0"
+    if tags:
+        def _vk(v):
+            parts = []
+            for p in v.split("."):
+                try:
+                    parts.append(int(p))
+                except ValueError:
+                    parts.append(p)
+            return tuple(parts)
+        version = max(tags, key=_vk)
+
+    kind = "skill"
+    topics_lower = name.lower()
+    if "mcp" in topics_lower or "mcp-server" in topics_lower:
+        kind = "mcp-server"
+    elif "bundle" in topics_lower or "pack" in topics_lower:
+        kind = "bundle"
+    elif "tool" in topics_lower:
+        kind = "tool"
+    elif "template" in topics_lower:
+        kind = "template"
+    elif "workflow" in topics_lower:
+        kind = "workflow"
+
+    try:
+        import yaml
+        yaml_data = {
+            "kind": kind,
+            "name": name,
+            "version": version,
+            "description": f"Auto-detected capability {name}",
+            "owner": owner,
+            "repository": repo_url,
+        }
+        dest.write_text(yaml.dump(yaml_data, default_flow_style=False, sort_keys=False))
+    except ImportError:
+        import json
+        json_data = {
+            "kind": kind,
+            "name": name,
+            "version": version,
+            "description": f"Auto-detected capability {name}",
+            "owner": owner,
+            "repository": repo_url,
+        }
+        dest.write_text(json.dumps(json_data, indent=2) + "\n")
+
+    print(f"  Auto-generated capability.yaml for {owner}/{name}@{version}")
+
+
 def _detect_git_remote(source_dir: Path) -> Optional[str]:
     git_dir = source_dir / ".git"
     if not git_dir.exists():
         return None
     try:
-        import subprocess
         result = subprocess.run(
             ["git", "remote", "get-url", "origin"],
             cwd=source_dir,
